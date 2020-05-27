@@ -1,0 +1,323 @@
+unit UnitmodulK;
+
+interface
+
+  uses
+    SysUtils, Dialogs;
+
+  Type
+	  Tovar = record //Тип записи для нашей задачи, который будет храниться в базе данных
+		  NameTovar:string[30]; //название товара
+		  ObProdaj:integer; //Объём продаж данного товара
+		  CenaTovara:integer; //Цена товара
+		  FIOProdavca:string[30]; //ФИО продавца
+	  end;
+	  PUzel = ^Zl;//Указатель на тип данных, создающий список
+	  Zl = record //Запись, реализующая список
+		  x:Tovar;//Информация, хранящаяся в узлах списка
+		  next:puzel;//Указатель на следующий узел
+		  pred:puzel;//Указатель на предыдущий узел
+	  end;
+    Fzap = file of Tovar;//Типизированный файл, для хранения базы данных
+
+  procedure BuildSpisok(var f: PUzel);//Процедура, для построения списка
+  procedure AddFirst(var f: PUzel; a: PUzel);//Вставить узел a первым в список
+  procedure AddAfter(var old:PUzel; a: PUzel);//Вставить узел a после old
+  procedure WriteSpTip(var f: PUzel; var ftip:Fzap);//Записать данные списка в типизированный файл
+  procedure WriteSpText(var f: PUzel; var ftxt:Text); //Записать в текстовый файл
+  procedure BuildSpisokFromTip(var f:puzel;var ftip:Fzap); //Построить список из даныхх, взятых из тип. файла
+  procedure DelFirstElement(var f,a: PUzel);//Выделить первый элемент списка
+  procedure DelElement(var old,a: PUzel);//Выделить элемент из списка, следующий за old
+  procedure ItogDay(var f:puzel;var ftxt:text);//Процедура для выполнения задачи
+  procedure DobVSp(var f:puzel);//Добавляет в список новые элементы, не удаляя старые
+  procedure DelSpisok(var f: PUzel); //Удалить список
+  procedure PoslElem(f:puzel;var a:puzel);
+  procedure Sort(f:puzel;var b:puzel);
+
+implementation
+
+procedure AddFirst(var f:puzel;a:puzel);//f-указатель на голову, a-узел который вставить в голову
+begin
+  a^.next:=f;
+  if f<>nil then f^.pred:=a;
+  f:=a;
+end;
+
+procedure AddAfter(var old:puzel;a:puzel);//old-указатель на хвост, а-узел, который вставить в хвост
+begin
+  a^.next:=old^.next;
+  old^.next:=a;
+  if a^.next<>nil then old^.next^.pred:=a;
+  a^.pred:=old;
+end;
+
+procedure BuildSpisok(var f: PUzel);
+var
+  d,a:puzel;
+  ch,ch2:char;
+begin
+  f:=nil;
+  repeat
+    new(a);
+    with a^.x do begin
+      NameTovar := InputBox('Введите название товара',' ',' ');
+      ObProdaj := StrToInt(InputBox('Введите объём продажи',' ',' '));
+      CenaTovara := StrToInt(InputBox('Введите цену товара',' ',' '));
+      FIOProdavca:= InputBox('Введите ФИО продавца',' ',' ');
+    end;
+    a^.next:=nil;
+    a^.pred:=nil;//Указатели на предыдущий и следующий нужно обнулить, чтобы они не указывали на что-то не нужное нам.
+    ch2:=InputBox('Вносить данные в базу данных?','д-да, н-нет','')[1];
+    if (ch2 = 'Y') or (ch2='y')or (ch2 = 'Д') or (ch2 = 'д') then begin
+      if (f=nil) then begin
+        AddFirst(f,a);
+        d:=f;
+      end
+      else begin
+        AddAfter(d,a);
+        d:=a;
+      end;
+    end;
+    ch:= InputBox('Хотите ввести ещё?','д-да н-нет','')[1];
+  until (ch = 'N') or (ch ='n')or (ch = 'Н') or (ch = 'н');
+end;
+
+procedure WriteSpTip(var f: PUzel; var ftip:Fzap);
+var
+  p: PUzel;
+  y: tovar;
+begin
+  p:= f;
+  while not(p = nil) do
+  begin
+    y:= p^.x;
+    write(ftip, y);
+    p:= p^.next;
+  end;
+end;
+
+procedure WriteSpText(var f: PUzel; var ftxt:Text);
+var
+  p: PUzel;
+  s: string;
+  y: tovar;
+begin
+  p:= f;
+  while not(p = nil) do
+  begin
+    y:= p^.x;
+    s:=y.NameTovar +' В количестве: ' + IntToStr(y.ObProdaj) +' По цене: '+ IntToStr(y.CenaTovara) + ' Был продан продавцом: '+ y.FIOProdavca;
+    writeln(ftxt, s);
+    p:= p^.next;
+  end;
+  writeln(ftxt,'');
+end;
+
+procedure DelFirstElement(var f,a: PUzel);
+begin
+  a := f;
+  f := f^.next;
+  a^.next := nil;
+  if f<>nil then f^.pred := nil;
+end;
+
+procedure DelElement(var old,a: PUzel);
+begin
+  if (old^.next = nil) then a:= nil                     //old последний узел в списке
+  else
+    if (old^.next^.next = nil) then             //old предпоследний узел в списке
+    begin
+      a := old^.next;
+      a^.pred:= nil;
+      old^.next:= nil;
+    end
+    else
+    begin                                            //за old не менее двух узлов в списке
+      a := old^.next;
+      old^.next := a^.next;
+      old^.next^.pred:= old;
+      a^.next := nil;
+      a^.pred:= nil;
+    end;
+end;
+
+procedure DelSpisok(var f: PUzel);  //Удалить список
+var
+  a: PUzel;
+begin
+  while (f <> nil) do
+  begin
+    DelFirstElement(f,a);
+    Dispose(a);
+  end;
+end;
+
+procedure BuildSpisokFromTip(var f:puzel;var ftip:Fzap);
+var
+  d,a:puzel;
+  b:tovar;
+begin
+  f:=nil;
+  while not eof(ftip) do begin
+    new(a);
+    read(ftip,b);
+    with a^.x do begin
+      NameTovar :=b.NameTovar;
+      ObProdaj :=b.ObProdaj;
+      CenaTovara :=b.CenaTovara;
+      FIOProdavca:=b.FIOProdavca;
+    end;
+    a^.next:=nil;
+    a^.pred:=nil;//Указатели на предыдущий и следующий нужно обнулить, чтобы они не указывали на что-то не нужное нам.
+    if f=nil then begin//Заполняем список узлами, значения которых скопированы из списка
+      AddFirst(f,a);
+      d:=f;
+    end
+    else begin
+      AddAfter(d,a);
+      d:=a;
+    end;
+  end;
+end;
+
+procedure ItogDay(var f:puzel;var ftxt:text);
+var
+  sum,sum2:integer;
+  d:puzel;
+  s:string;
+begin
+  writeln(ftxt,'Итог дня: ');
+  sum2:=0;
+  s:='';
+  d:=f;
+  while not(d=nil) do begin
+    sum:=d^.x.ObProdaj*d^.x.CenaTovara;
+    sum2:=sum2+sum;
+    s:='Продавец '+ d^.x.FIOProdavca +  ' Продал товар: '+ d^.x.NameTovar +  ' В объёме: '+IntToStr(d^.x.ObProdaj)+ ' шт.' + ' На сумму: '+ IntToStr(sum)+ ' руб.';
+    writeln(ftxt,s);
+    d^.x.FIOProdavca:='';
+    d:=d^.next;
+    end;
+  writeln(ftxt,'Итого: ' + IntToStr(sum2)+ ' руб.');
+  writeln(ftxt,'');
+end;
+
+procedure DobVSp(var f:puzel);
+var
+  d,a:puzel;
+  ch,ch2:string;
+begin
+  repeat
+    new(a);
+    if f<>nil then d:=f;
+    with a^.x do begin
+      NameTovar := InputBox('Введите название товара',' ',' ');
+      ObProdaj := StrToInt(InputBox('Введите объём продажи',' ',' '));
+      CenaTovara := StrToInt(InputBox('Введите цену товара',' ',' '));
+      FIOProdavca:= InputBox('Введите ФИО продавца',' ',' ');
+    end;
+    a^.next:=nil;
+    a^.pred:=nil;//Указатели на предыдущий и следующий нужно обнулить, чтобы они не указывали на что-то не нужное нам.
+    ch2:= InputBox('Вносить данные в базу данных?','д-да,н-нет',' ')[1];
+    if (ch2= 'Y') or (ch2='y') or (ch2 = 'Д') or (ch2 = 'д') then begin
+      if (f=nil) then begin
+        AddFirst(f,a);
+        d:=f;
+      end
+      else begin
+        AddAfter(d,a);
+        d:=a;
+      end;
+    end;
+    ch:= InputBox('Хотите ввести ещё?','д-да,н-нет',' ')[1];
+  until (ch = 'N') or (ch ='n')or (ch = 'Н') or (ch = 'н');
+end;
+
+procedure PoslElem(f:puzel;var a:puzel);
+begin
+  if f=nil then a:=nil
+  else begin
+    while f^.next<> nil do begin
+      f:= f^.next;
+    end;
+    a:=f;
+    a^.pred:=nil;
+  end;
+end;
+
+procedure Sort(f:puzel;var b:puzel);
+var
+  s:string;
+  c,d:puzel;
+  s1:integer;
+begin
+  s:=inputbox('Поиск','Введите по какому критерию вести поиск?'+#13#10+'(1-ФИО продавца,2-Название товара'+#13#10+'3-объём продаж,4-цена товара)','');
+  if s ='1' then begin
+    c:=f;
+    while not(c=nil) do begin
+      d:=c^.next;
+      while not(d=nil) do begin
+        if c^.x.FIOProdavca >= d^.x.FIOProdavca then begin
+          s:=d^.x.FIOProdavca;
+          d^.x.FIOProdavca:=c^.x.FIOProdavca;
+          c^.x.FIOProdavca:=s;
+        end;
+        d:=d^.next;
+      end;
+      c:=c^.next;
+    end;
+    b:=c;
+  end;
+  if s ='2' then begin
+    c:=f;
+    while not(c=nil) do begin
+      d:=c^.next;
+      while not(d=nil) do begin
+        if c^.x.NameTovar >= d^.x.NameTovar then begin
+          s:=d^.x.NameTovar;
+          d^.x.NameTovar:=c^.x.NameTovar;
+          c^.x.NameTovar:=s;
+        end;
+        d:=d^.next;
+      end;
+      c:=c^.next;
+    end;
+    b:=c;
+  end;
+  if s ='3' then begin
+    c:=f;
+    while not(c=nil) do begin
+      d:=c^.next;
+      while not(d=nil) do begin
+        if c^.x.ObProdaj >= d^.x.ObProdaj then begin
+          s1:=d^.x.ObProdaj;
+          d^.x.ObProdaj:=c^.x.ObProdaj;
+          c^.x.ObProdaj:=s1;
+        end;
+        d:=d^.next;
+      end;
+      c:=c^.next;
+    end;
+    b:=c;
+  end;
+  if s ='4' then begin
+    c:=f;
+    while not(c=nil) do begin
+      d:=c^.next;
+      while not(d=nil) do begin
+        if c^.x.CenaTovara >= d^.x.CenaTovara then begin
+          s1:=d^.x.CenaTovara;
+          d^.x.CenaTovara:=c^.x.CenaTovara;
+          c^.x.CenaTovara:=s1;
+        end;
+        d:=d^.next;
+      end;
+      c:=c^.next;
+    end;
+    b:=c;
+    end;
+end;
+
+
+end.
+
